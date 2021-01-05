@@ -1,3 +1,78 @@
-Hi This is my first test filei
+FROM centos:7
 
-This is a line added into first branch
+ARG http_proxy
+ARG https_proxy
+
+ENV HTTP_PROXY=$http_proxy
+ENV HTTPS_PROXY=$https_proxy
+ENV NO_PROXY="nexus.com.com,*.com.com,*.com.corp"
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+ENV NODE_VERSION=10.15.1
+ENV ORACLE_HOME=/usr/lib/oracle/12.2/client64
+ENV PATH=$PATH:$ORACLE_HOME/bin
+ENV LD_LIBRARY_PATH=$ORACLE_HOME/lib
+
+COPY _intermediate.cer /etc/pki/ca-trust/source/anchors/localhost_ca.crt
+COPY localhost_bluecoat.cer /etc/pki/ca-trust/source/anchors/localhost_localhost.crt
+COPY npmrc /root/.npmrc
+COPY wandisco-svn.repo /etc/yum.repos.d/wandisco-svn.repo
+
+# To find which package provides missing dependency, for example libXss.so
+#   yum whatprovides libXss*
+# and then install displayed answer like
+#   yum install -y libXScrnSaver*
+
+# install commands taken from
+# https://tecadmin.net/install-latest-nodejs-and-npm-on-centos/
+# Install dependencies
+# note:
+#   Gtk2 for Cypress < 3.3.0
+#   Gtk3 for Cypress >= 3.3.0
+#RUN yum install -y gtk2-2.24*
+
+RUN echo sslverify=false >> /etc/yum.conf && \
+  yum install -y ca-certificates bash gcc-c++ make autoconf vim wget dbus-11 \
+  xorg-x11-server-Xvfb xorg-x11-xauth gtk3-3.22* libXtst* libXScrnSaver* GConf2* alsa-lib* git* && \
+  update-ca-trust
+
+# avoid compile error
+RUN yum install -y perl-ExtUtils-MakeMaker
+
+# install git (Version 1.7.7.5 required)
+RUN yum install -y gettext-devel expat-devel curl-devel zlib-devel openssl-devel
+RUN wget --no-check-certificate -O /usr/local/src/git-2.28.0.tar.gz http://kernel.org/pub/software/scm/git/git-2.28.0.tar.gz
+RUN tar xzvf /usr/local/src/git-2.28.0.tar.gz -C /usr/local/src
+RUN cd /usr/local/src/git-2.28.0 && make prefix=/usr/local all && make prefix=/usr/local install
+
+# install svn
+RUN yum install -y subversion
+
+# install git-svn
+RUN yum install -y  git-svn
+
+# svn-tool
+RUN wget --no-check-certificate -O /usr/local/src/svn-migration-scripts.jar https://bitbucket.org/atlassian/svn-migration-scripts/downloads/svn-migration-scripts.jar
+
+# Install Java
+RUN yum install -y \
+       java-1.8.0-openjdk \
+       java-1.8.0-openjdk-devel
+
+ENV JAVA_HOME /etc/alternatives/jre
+
+RUN mkdir /app
+# versions of local tools
+WORKDIR /app
+
+#Install pkgdiff
+COPY pkgdiff-1.7.2.tar.gz /usr/local/src/pkgdiff-1.7.2.tar.gz
+RUN tar xzvf /usr/local/src/pkgdiff-1.7.2.tar.gz -C /usr/local/src
+RUN cd /usr/local/src/pkgdiff-1.7.2 && make prefix=/usr/local install
+
+#Install QTestAgent
+#COPY agentctl-2.3.4-linux-x64-full.tgz /usr/local/src/agentctl-2.3.4-linux-x64-full.tgz
+
+
+RUN echo  " centOS version:  $(cat /etc/centos-release) \n" \
+  "svn version: $(svn --version) \n" \
+  "user:            $(whoami) \n"
